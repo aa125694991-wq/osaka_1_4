@@ -1,0 +1,8 @@
+{
+  "name": " 2026/1/4 KyotoFlow Travel",
+  "description": "A high-fidelity, mobile-first group travel planner for Osaka & Kyoto.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
