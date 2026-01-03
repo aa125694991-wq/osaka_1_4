@@ -1,6 +1,10 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
+// Use namespace import and cast to any to resolve "Module has no exported member" errors
+// which can happen with certain TS configurations or Firebase versions.
+import * as firebaseAuth from "firebase/auth";
+const { getAuth, onAuthStateChanged, signInAnonymously } = firebaseAuth as any;
+
 import { getStorage } from "firebase/storage";
 import { getAnalytics } from "firebase/analytics";
 

@@ -32,27 +32,30 @@ const PlanningView: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-ios-bg">
-       {/* Header: Added z-20 relative to ensure it stays on top of scrolling content */}
-       <div className="px-6 pt-safe pt-4 pb-6 bg-white border-b border-gray-200 z-20 relative shadow-sm">
-         <h1 className="text-2xl font-bold text-gray-900 mb-4">行前準備</h1>
-         
-         <div className="flex bg-gray-100 p-1 rounded-xl">
-           <button 
-             onClick={() => setActiveList('todo')}
-             className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${
-               activeList === 'todo' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-             }`}
-           >
-             待辦事項
-           </button>
-           <button 
-             onClick={() => setActiveList('packing')}
-             className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${
-               activeList === 'packing' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-             }`}
-           >
-             行李清單
-           </button>
+       {/* Header: z-20 relative to ensure it stays on top. 
+           FIXED: Nested pt-safe and pt-4 to avoid CSS conflict */}
+       <div className="bg-white border-b border-gray-200 z-20 relative shadow-sm pt-safe">
+         <div className="px-6 pt-4 pb-6">
+             <h1 className="text-2xl font-bold text-gray-900 mb-4">行前準備</h1>
+             
+             <div className="flex bg-gray-100 p-1 rounded-xl">
+               <button 
+                 onClick={() => setActiveList('todo')}
+                 className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                   activeList === 'todo' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                 }`}
+               >
+                 待辦事項
+               </button>
+               <button 
+                 onClick={() => setActiveList('packing')}
+                 className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                   activeList === 'packing' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                 }`}
+               >
+                 行李清單
+               </button>
+             </div>
          </div>
        </div>
 

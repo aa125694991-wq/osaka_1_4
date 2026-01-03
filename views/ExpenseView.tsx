@@ -318,7 +318,7 @@ const ExpenseView: React.FC = () => {
   if (viewMode === 'history') {
       return (
         <div className="flex flex-col h-full bg-gray-50 animate-[fadeIn_0.2s_ease-out]">
-            {/* History Header: Added z-20 */}
+            {/* History Header: Correctly handled safe area */}
             <div className="bg-white pt-safe border-b border-gray-200 sticky top-0 z-20 shadow-sm">
                  <div className="px-4 pt-4 pb-2">
                     <div className="flex items-center justify-between mb-4">
@@ -440,35 +440,38 @@ const ExpenseView: React.FC = () => {
   // Dashboard View
   return (
     <div className="flex flex-col h-full bg-gray-50 relative">
-       {/* Dashboard Header: z-20 for high layer priority */}
-       <div className="bg-ios-indigo px-6 pt-safe pt-2 pb-12 rounded-b-[2.5rem] shadow-lg relative z-20 shrink-0">
-         <div className="flex justify-between items-center mb-6 pt-2">
-            <div className="flex items-center gap-2">
-               <h1 className="text-2xl font-bold text-white">支出總覽</h1>
-               <button onClick={() => setShowMemberModal(true)} className="bg-white/20 px-2 py-0.5 rounded-lg text-white/90 text-xs font-medium backdrop-blur-sm active:bg-white/30">
-                  <i className="fa-solid fa-user-group mr-1"></i>
-                  {members.length}人
-               </button>
-            </div>
-            <button 
-                onClick={() => setViewMode('history')}
-                className="bg-white/20 p-2 rounded-full text-white backdrop-blur-sm active:scale-90 transition-transform"
-            >
-              <i className="fa-solid fa-list-ul"></i>
-            </button>
-         </div>
-         
-         <div className="text-white">
-            <p className="text-ios-indigo-100 text-sm mb-1">總支出 (預估台幣)</p>
-            <div className="text-4xl font-bold tracking-tight">
-               <span className="text-2xl opacity-70 mr-1">NT$</span>
-               {Math.round(totalTWD).toLocaleString()}
-            </div>
-            <div className="mt-2 flex items-center gap-2 text-sm opacity-80">
-               <i className="fa-solid fa-yen-sign"></i>
-               <span>{totalJPY.toLocaleString()} JPY</span>
-               <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">匯率: {JPY_RATE}</span>
-            </div>
+       {/* Dashboard Header: z-20 for high layer priority. 
+           FIXED: Nested pt-safe and pt-2 to avoid CSS conflict overlapping status bar */}
+       <div className="bg-ios-indigo pt-safe rounded-b-[2.5rem] shadow-lg relative z-20 shrink-0">
+         <div className="px-6 pt-2 pb-12">
+             <div className="flex justify-between items-center mb-6 pt-2">
+                <div className="flex items-center gap-2">
+                   <h1 className="text-2xl font-bold text-white">支出總覽</h1>
+                   <button onClick={() => setShowMemberModal(true)} className="bg-white/20 px-2 py-0.5 rounded-lg text-white/90 text-xs font-medium backdrop-blur-sm active:bg-white/30">
+                      <i className="fa-solid fa-user-group mr-1"></i>
+                      {members.length}人
+                   </button>
+                </div>
+                <button 
+                    onClick={() => setViewMode('history')}
+                    className="bg-white/20 p-2 rounded-full text-white backdrop-blur-sm active:scale-90 transition-transform"
+                >
+                  <i className="fa-solid fa-list-ul"></i>
+                </button>
+             </div>
+             
+             <div className="text-white">
+                <p className="text-ios-indigo-100 text-sm mb-1">總支出 (預估台幣)</p>
+                <div className="text-4xl font-bold tracking-tight">
+                   <span className="text-2xl opacity-70 mr-1">NT$</span>
+                   {Math.round(totalTWD).toLocaleString()}
+                </div>
+                <div className="mt-2 flex items-center gap-2 text-sm opacity-80">
+                   <i className="fa-solid fa-yen-sign"></i>
+                   <span>{totalJPY.toLocaleString()} JPY</span>
+                   <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">匯率: {JPY_RATE}</span>
+                </div>
+             </div>
          </div>
        </div>
 
