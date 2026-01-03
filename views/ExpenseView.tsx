@@ -42,7 +42,11 @@ const ExpenseView: React.FC = () => {
   // Modals State
   const [showAddModal, setShowAddModal] = useState(false);
   const [showMemberModal, setShowMemberModal] = useState(false);
+  
+  // Edit/Detail Modal State
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<Expense | null>(null);
   
   // Member Edit Temp State
   const [editingMembers, setEditingMembers] = useState<string[]>([]);
@@ -64,7 +68,6 @@ const ExpenseView: React.FC = () => {
     const unsubExpenses = onSnapshot(q, (snapshot) => {
         if (snapshot.empty && !loading) {
              // Optional: Seed if empty? We'll leave it empty to be clean, or seed once.
-             // For now, let's just let it be empty.
         }
         
         const loadedExpenses = snapshot.docs.map(d => d.data() as Expense);
@@ -122,7 +125,7 @@ const ExpenseView: React.FC = () => {
   const totalTWD = expenses.filter(e => e.currency === 'TWD').reduce((acc, cur) => acc + cur.amount, 0) + (totalJPY * JPY_RATE);
 
   // --- Logic: Split Algorithm ---
-  const { balances, settlements } = useMemo(() => {
+  const { balances, settlements, groupedExpenses } = useMemo(() => {
     const bal: Record<string, number> = {};
     members.forEach(m => bal[m] = 0);
 
@@ -184,7 +187,18 @@ const ExpenseView: React.FC = () => {
         if (creditor.amount < 1) j++;
     }
 
-    return { balances: bal, settlements: results };
+    // 3. Group Expenses by Date
+    const groups: { date: string; items: Expense[] }[] = [];
+    expenses.forEach((exp) => {
+        const lastGroup = groups[groups.length - 1];
+        if (lastGroup && lastGroup.date === exp.date) {
+            lastGroup.items.push(exp);
+        } else {
+            groups.push({ date: exp.date, items: [exp] });
+        }
+    });
+
+    return { balances: bal, settlements: results, groupedExpenses: groups };
   }, [expenses, members]);
 
   // --- Handlers ---
@@ -213,13 +227,31 @@ const ExpenseView: React.FC = () => {
     }
   };
 
+  const handleUpdate = async () => {
+      if (!editForm) return;
+      try {
+          await setDoc(doc(db, 'expenses', editForm.id), editForm);
+          setIsEditing(false);
+          setSelectedExpense(editForm); // Update view mode data
+      } catch (e) {
+          alert("更新失敗");
+      }
+  };
+
   const handleDelete = async () => {
     if (!selectedExpense) return;
     const confirmDelete = window.confirm("確定要刪除這筆款項嗎？此動作無法復原。");
     if (confirmDelete) {
         await deleteDoc(doc(db, 'expenses', selectedExpense.id));
         setSelectedExpense(null);
+        setIsEditing(false);
     }
+  };
+
+  const openDetail = (exp: Expense) => {
+      setSelectedExpense(exp);
+      setEditForm(JSON.parse(JSON.stringify(exp))); // Deep copy for editing
+      setIsEditing(false);
   };
 
   const resetForm = () => {
@@ -240,6 +272,20 @@ const ExpenseView: React.FC = () => {
     } else {
       setSplitWith([...splitWith, member]);
     }
+  };
+  
+  // Logic for editing mode toggle
+  const toggleEditSplitMember = (member: string) => {
+      if (!editForm) return;
+      let newSplit = [...editForm.splitWith];
+      if (newSplit.includes(member)) {
+          if (newSplit.length > 1) {
+              newSplit = newSplit.filter(m => m !== member);
+          }
+      } else {
+          newSplit.push(member);
+      }
+      setEditForm({ ...editForm, splitWith: newSplit });
   };
 
   const saveMembers = async () => {
@@ -286,12 +332,24 @@ const ExpenseView: React.FC = () => {
       return 'bg-ios-indigo';
   };
 
+  const formatDateHeader = (dateStr: string) => {
+    try {
+        const date = new Date(dateStr);
+        const m = date.getMonth() + 1;
+        const d = date.getDate();
+        const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
+        return `${m}/${d} ${day}`;
+    } catch {
+        return dateStr;
+    }
+  };
+
   // --- Render Sub-Components ---
 
   const renderExpenseItem = (exp: Expense) => (
     <div 
         key={exp.id} 
-        onClick={() => setSelectedExpense(exp)}
+        onClick={() => openDetail(exp)}
         className="bg-white p-4 rounded-xl shadow-ios-sm border border-gray-100 flex items-center justify-between active:scale-[0.99] transition-transform cursor-pointer"
     >
        <div className="flex items-center gap-4">
@@ -355,7 +413,7 @@ const ExpenseView: React.FC = () => {
             </div>
             
             {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+            <div className="flex-1 overflow-y-auto px-4 pb-4 pt-2 space-y-4 bg-gray-50">
                 {historyTab === 'list' ? (
                     expenses.length === 0 ? (
                         <div className="text-center text-gray-400 mt-20">
@@ -363,10 +421,23 @@ const ExpenseView: React.FC = () => {
                             <p>目前沒有任何記錄</p>
                         </div>
                     ) : (
-                        expenses.map(renderExpenseItem)
+                        // groupedExpenses render logic
+                        <div className="space-y-6">
+                            {groupedExpenses.map(group => (
+                                <div key={group.date}>
+                                    <div className="sticky top-0 z-10 py-2 px-1 text-xs font-bold text-gray-400 uppercase tracking-wider bg-gray-50/95 backdrop-blur-sm mb-1">
+                                        {formatDateHeader(group.date)}
+                                        <span className="ml-2 font-normal opacity-50">• {group.items.length} 筆</span>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {group.items.map(renderExpenseItem)}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     )
                 ) : (
-                    <div className="space-y-6">
+                    <div className="space-y-6 mt-4">
                         {/* Summary of Balances */}
                         <div className="bg-white rounded-2xl p-5 shadow-ios-sm border border-gray-100">
                             <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -659,64 +730,195 @@ const ExpenseView: React.FC = () => {
   );
 
   function renderDetailModal() {
-      if (!selectedExpense) return null;
+      if (!selectedExpense || !editForm) return null;
+      
+      const isViewMode = !isEditing;
+
       return (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
-          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-[slideUp_0.3s_ease-out]">
-             <div className="h-32 bg-gray-100 relative flex flex-col items-center justify-center border-b border-gray-200">
+          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-[slideUp_0.3s_ease-out] flex flex-col max-h-[90vh]">
+             {/* Modal Header / Banner */}
+             <div className="bg-gray-100 relative flex flex-col items-center justify-center border-b border-gray-200 shrink-0 py-6">
                  <button 
                     onClick={() => setSelectedExpense(null)}
-                    className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-white rounded-full text-gray-500 shadow-sm active:scale-95"
+                    className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-white rounded-full text-gray-500 shadow-sm active:scale-95 z-10"
                  >
                     <i className="fa-solid fa-xmark"></i>
                  </button>
-                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-xl mb-2 shadow-lg ${getCategoryColor(selectedExpense.category)}`}>
-                     <i className={`fa-solid ${getCategoryIcon(selectedExpense.category)}`}></i>
-                 </div>
-                 <div className="text-2xl font-bold text-gray-900">¥{selectedExpense.amount.toLocaleString()}</div>
-                 <div className="text-xs text-gray-500">≈ NT${Math.round(selectedExpense.amount * JPY_RATE)}</div>
+                 
+                 {isViewMode && (
+                     <button 
+                        onClick={() => setIsEditing(true)}
+                        className="absolute top-4 left-4 w-8 h-8 flex items-center justify-center bg-white rounded-full text-ios-blue shadow-sm active:scale-95 z-10"
+                     >
+                        <i className="fa-solid fa-pen"></i>
+                     </button>
+                 )}
+
+                 {isViewMode ? (
+                    <>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-xl mb-2 shadow-lg ${getCategoryColor(selectedExpense.category)}`}>
+                            <i className={`fa-solid ${getCategoryIcon(selectedExpense.category)}`}></i>
+                        </div>
+                        <div className="text-2xl font-bold text-gray-900">¥{selectedExpense.amount.toLocaleString()}</div>
+                        <div className="text-xs text-gray-500">≈ NT${Math.round(selectedExpense.amount * JPY_RATE)}</div>
+                    </>
+                 ) : (
+                    <div className="w-full px-8">
+                       <label className="text-xs font-bold text-gray-400 uppercase text-center block mb-1">金額 (日幣)</label>
+                       <input 
+                         type="number" 
+                         inputMode="decimal"
+                         className="w-full text-center text-3xl font-bold bg-transparent border-b-2 border-ios-blue outline-none py-1"
+                         value={editForm.amount}
+                         onChange={(e) => setEditForm({ ...editForm, amount: parseFloat(e.target.value) || 0 })}
+                       />
+                    </div>
+                 )}
              </div>
              
-             <div className="p-6 space-y-4">
-                 <div>
-                    <label className="text-xs font-bold text-gray-400 uppercase">項目</label>
-                    <p className="text-lg font-medium text-gray-900">{selectedExpense.note || (CATEGORY_MAP[selectedExpense.category] || selectedExpense.category)}</p>
-                 </div>
-                 
-                 <div className="flex gap-6">
-                    <div>
-                        <label className="text-xs font-bold text-gray-400 uppercase">日期</label>
-                        <p className="font-medium text-gray-800">{selectedExpense.date}</p>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-400 uppercase">類別</label>
-                        <p className="font-medium text-gray-800">{CATEGORY_MAP[selectedExpense.category] || selectedExpense.category}</p>
-                    </div>
-                 </div>
-
-                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                    <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-200">
-                        <span className="text-sm text-gray-500">付款人</span>
-                        <span className="font-bold text-gray-900">{selectedExpense.payer}</span>
-                    </div>
-                    <div>
-                        <span className="text-sm text-gray-500 block mb-1">分攤對象</span>
-                        <div className="flex flex-wrap gap-1">
-                            {selectedExpense.splitWith.map(name => (
-                                <span key={name} className="text-xs bg-white border border-gray-200 px-2 py-1 rounded text-gray-600">
-                                    {name}
-                                </span>
-                            ))}
+             <div className="p-6 space-y-4 overflow-y-auto">
+                 {isViewMode ? (
+                     /* --- VIEW MODE --- */
+                     <>
+                        <div>
+                            <label className="text-xs font-bold text-gray-400 uppercase">項目</label>
+                            <p className="text-lg font-medium text-gray-900">{selectedExpense.note || (CATEGORY_MAP[selectedExpense.category] || selectedExpense.category)}</p>
                         </div>
-                    </div>
-                 </div>
+                        
+                        <div className="flex gap-6">
+                            <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase">日期</label>
+                                <p className="font-medium text-gray-800">{selectedExpense.date}</p>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase">類別</label>
+                                <p className="font-medium text-gray-800">{CATEGORY_MAP[selectedExpense.category] || selectedExpense.category}</p>
+                            </div>
+                        </div>
 
-                 <button 
-                    onClick={handleDelete}
-                    className="w-full py-3 mt-4 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
-                 >
-                    <i className="fa-regular fa-trash-can"></i> 刪除此筆記錄
-                 </button>
+                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                            <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-200">
+                                <span className="text-sm text-gray-500">付款人</span>
+                                <span className="font-bold text-gray-900">{selectedExpense.payer}</span>
+                            </div>
+                            <div>
+                                <span className="text-sm text-gray-500 block mb-1">分攤對象</span>
+                                <div className="flex flex-wrap gap-1">
+                                    {selectedExpense.splitWith.map(name => (
+                                        <span key={name} className="text-xs bg-white border border-gray-200 px-2 py-1 rounded text-gray-600">
+                                            {name}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={handleDelete}
+                            className="w-full py-3 mt-4 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                        >
+                            <i className="fa-regular fa-trash-can"></i> 刪除此筆記錄
+                        </button>
+                     </>
+                 ) : (
+                     /* --- EDIT MODE --- */
+                     <>
+                        <div className="space-y-4 pb-2">
+                           {/* Note Input */}
+                           <div>
+                              <label className="text-xs font-bold text-gray-400 uppercase">項目名稱</label>
+                              <input 
+                                className="w-full border-b border-gray-200 py-2 outline-none text-lg font-medium"
+                                value={editForm.note || ''}
+                                onChange={(e) => setEditForm({ ...editForm, note: e.target.value })}
+                                placeholder="項目名稱"
+                              />
+                           </div>
+
+                           {/* Date Input */}
+                           <div>
+                              <label className="text-xs font-bold text-gray-400 uppercase">日期</label>
+                              <input 
+                                type="date"
+                                className="w-full border-b border-gray-200 py-2 outline-none font-medium bg-transparent"
+                                value={editForm.date}
+                                onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                              />
+                           </div>
+
+                           {/* Category Select */}
+                           <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">類別</label>
+                                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                                    {CATEGORIES.map(c => (
+                                    <button 
+                                        key={c}
+                                        onClick={() => setEditForm({ ...editForm, category: c })}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-all ${
+                                            editForm.category === c ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-200 text-gray-600'
+                                        }`}
+                                    >
+                                        {c}
+                                    </button>
+                                    ))}
+                                </div>
+                           </div>
+
+                           {/* Payer Select */}
+                           <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">付款人</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {members.map(m => (
+                                    <button 
+                                        key={m}
+                                        onClick={() => setEditForm({ ...editForm, payer: m })}
+                                        className={`py-1.5 rounded-lg text-xs font-bold transition-all truncate ${
+                                            editForm.payer === m ? 'bg-ios-blue text-white shadow-md' : 'bg-gray-100 text-gray-500'
+                                        }`}
+                                    >
+                                        {m}
+                                    </button>
+                                    ))}
+                                </div>
+                           </div>
+
+                           {/* Split Select */}
+                           <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">分攤對象</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {members.map(m => (
+                                    <button 
+                                        key={m}
+                                        onClick={() => toggleEditSplitMember(m)}
+                                        className={`py-1.5 rounded-lg text-xs font-bold border-2 transition-all flex items-center justify-center gap-1 truncate ${
+                                            editForm.splitWith.includes(m) ? 'border-ios-green text-ios-green bg-green-50' : 'border-transparent bg-gray-50 text-gray-400'
+                                        }`}
+                                    >
+                                        {editForm.splitWith.includes(m) && <i className="fa-solid fa-check text-[8px]"></i>}
+                                        {m}
+                                    </button>
+                                    ))}
+                                </div>
+                           </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                            <button 
+                                onClick={() => setIsEditing(false)}
+                                className="flex-1 bg-gray-100 text-gray-600 py-3 rounded-xl font-bold text-sm"
+                            >
+                                取消
+                            </button>
+                            <button 
+                                onClick={handleUpdate}
+                                className="flex-1 bg-ios-blue text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-200"
+                            >
+                                儲存變更
+                            </button>
+                        </div>
+                     </>
+                 )}
              </div>
           </div>
         </div>
