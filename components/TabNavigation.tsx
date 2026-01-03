@@ -14,8 +14,8 @@ const TabNavigation: React.FC<TabNavigationProps> = ({ currentTab, onTabChange }
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-200/50 pb-safe pt-1 z-50 shadow-[0_-1px_3px_rgba(0,0,0,0.03)]">
-      <div className="flex justify-around items-center max-w-md mx-auto h-[50px]">
+    <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-200/50 pb-safe z-50 shadow-[0_-1px_3px_rgba(0,0,0,0.03)]">
+      <div className="flex justify-around items-center h-[50px]">
         {tabs.map((tab) => (
           <button
             key={tab.id}
