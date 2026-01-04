@@ -259,10 +259,26 @@ const ScheduleView: React.FC = () => {
   };
 
   const handleDeleteEvent = async (eventToDelete: ScheduleEvent) => {
-    if(window.confirm("確定刪除？")) {
-        await deleteDoc(doc(db, 'schedule_events', eventToDelete.id));
-        setSelectedEvent(null);
+    // Removed window.confirm here because the UI (EventEditModal) now handles the 2-step confirmation.
+    // This makes the UI feel more responsive and consistent.
+    await deleteDoc(doc(db, 'schedule_events', eventToDelete.id));
+    setSelectedEvent(null);
+  };
+
+  const handleOpenMaps = (event: ScheduleEvent, e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止事件冒泡，避免打開詳情視窗
+    if (!event.location) return;
+    const { name, lat, lng } = event.location;
+    let query = '';
+    if (lat && lng) {
+      query = `${lat},${lng}`;
+    } else if (name) {
+      query = name;
+    } else {
+      return;
     }
+    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+    window.open(url, '_blank');
   };
 
   if (permissionError) {
@@ -302,8 +318,11 @@ const ScheduleView: React.FC = () => {
         
         {/* Date Scroller (Hidden in Reorder Mode) */}
         {!isReorderMode && (
-            <div className="flex overflow-x-auto no-scrollbar px-6 pb-4 gap-4 snap-x w-full min-h-[100px]">
-            {dates.map((date) => {
+            <div className="flex overflow-x-auto no-scrollbar pb-4 gap-4 snap-x w-full min-h-[100px]">
+                {/* Spacer to align with header (px-6 = w-6) but allow scrolling to edge */}
+                <div className="w-6 flex-shrink-0"></div>
+                
+                {dates.map((date) => {
                     const dateObj = new Date(date);
                     const day = dateObj.getDate();
                     const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
@@ -326,7 +345,7 @@ const ScheduleView: React.FC = () => {
                     </button>
                     );
                 })}
-                <div className="w-2 flex-shrink-0"></div>
+                <div className="w-6 flex-shrink-0"></div>
             </div>
         )}
       </div>
@@ -419,7 +438,7 @@ const ScheduleView: React.FC = () => {
             ) : (
                 /* --- Standard Timeline Mode --- */
                 currentEventsSorted.map((event) => (
-                    <div key={event.id} className="relative group cursor-pointer" onClick={() => setSelectedEvent(event)}>
+                    <div key={event.id} className="relative group cursor-pointer" onClick={() => { setSelectedEvent(event); setIsNewEvent(false); }}>
                     <div className={`absolute -left-[25px] w-4 h-4 rounded-full border-2 border-white ring-2 ring-gray-100 ${CATEGORY_COLORS[event.category].split(' ')[0]}`}></div>
                     <div className="bg-white rounded-xl p-4 shadow-ios-sm border border-gray-100 transition-transform active:scale-[0.98]">
                         <div className="flex justify-between items-start mb-2">
@@ -440,9 +459,21 @@ const ScheduleView: React.FC = () => {
                         </div>
                         )}
 
-                        <div className="flex items-center text-gray-500 text-sm">
-                        <i className="fa-solid fa-location-dot mr-1.5 text-ios-red w-4 text-center"></i>
-                        <span className="truncate">{event.location.name || '未設定地點'}</span>
+                        <div className="flex justify-between items-center mt-2">
+                            <div className="flex items-center text-gray-500 text-sm min-w-0 flex-1 mr-2">
+                                <i className="fa-solid fa-location-dot mr-1.5 text-ios-red w-4 text-center shrink-0"></i>
+                                <span className="truncate">{event.location.name || '未設定地點'}</span>
+                            </div>
+                            
+                            {/* Direct Navigation Button */}
+                            {event.location.name && (
+                                <button 
+                                    onClick={(e) => handleOpenMaps(event, e)}
+                                    className="shrink-0 bg-blue-50 text-ios-blue text-xs font-bold px-3 py-1.5 rounded-full active:bg-blue-100 transition-colors flex items-center gap-1"
+                                >
+                                    <i className="fa-solid fa-location-arrow"></i> 導航
+                                </button>
+                            )}
                         </div>
                     </div>
                     </div>

@@ -16,6 +16,9 @@ const EventEditModal: React.FC<EventEditModalProps> = ({ event, isNew, onClose, 
   const [isEditing, setIsEditing] = useState(isNew);
   const [editForm, setEditForm] = useState<Partial<ScheduleEvent>>({ ...event });
   
+  // Delete Confirmation State
+  const [isDeleting, setIsDeleting] = useState(false);
+  
   // Photo Action Sheet State
   const [showPhotoActions, setShowPhotoActions] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -30,6 +33,7 @@ const EventEditModal: React.FC<EventEditModalProps> = ({ event, isNew, onClose, 
   useEffect(() => {
     setEditForm({ ...event });
     setIsEditing(isNew);
+    setIsDeleting(false); // Reset delete state when opening new event
   }, [event, isNew]);
 
   // Cleanup camera stream on unmount
@@ -48,6 +52,17 @@ const EventEditModal: React.FC<EventEditModalProps> = ({ event, isNew, onClose, 
     } as ScheduleEvent;
     onSave(updatedEvent);
     setIsEditing(false);
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDeleting) {
+      // Confirmed delete
+      onDelete(event);
+    } else {
+      // First click: enter confirmation mode
+      setIsDeleting(true);
+    }
   };
 
   const handleOpenMaps = () => {
@@ -171,8 +186,14 @@ const EventEditModal: React.FC<EventEditModalProps> = ({ event, isNew, onClose, 
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
-      <div className="bg-white w-full max-w-md h-[85vh] sm:h-auto sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col animate-[slideUp_0.3s_ease-out]">
+    <div 
+        className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4"
+        onClick={onClose} // Close on backdrop click
+    >
+      <div 
+        className="bg-white w-full max-w-md h-[85vh] sm:h-auto sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col animate-[slideUp_0.3s_ease-out]"
+        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking modal content
+      >
         
         <div className="p-6 flex-1 overflow-y-auto">
             {isEditing ? (
@@ -264,12 +285,7 @@ const EventEditModal: React.FC<EventEditModalProps> = ({ event, isNew, onClose, 
                 </div>
 
                 <div className="pt-4 flex gap-3">
-                    {!isNew && (
-                      <button onClick={() => onDelete(event)} className="flex-1 bg-red-100 text-red-600 py-3 rounded-xl font-bold text-sm">
-                          刪除
-                      </button>
-                    )}
-                    <button onClick={handleSave} className="flex-[2] bg-ios-blue text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-200">
+                    <button onClick={handleSave} className="w-full bg-ios-blue text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-200">
                       儲存
                     </button>
                 </div>
@@ -389,7 +405,7 @@ const EventEditModal: React.FC<EventEditModalProps> = ({ event, isNew, onClose, 
 
                   {/* Notes Row */}
                   {event.notes && (
-                    <div className="mt-2 pt-2 pb-10">
+                    <div className="mt-2 pt-2">
                         <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
                           <i className="fa-solid fa-align-left"></i> 備註
                         </h4>
@@ -398,6 +414,34 @@ const EventEditModal: React.FC<EventEditModalProps> = ({ event, isNew, onClose, 
                         </div>
                     </div>
                   )}
+
+                  {/* Delete Button Area (Added in View Mode) */}
+                  <div className="pt-6 mt-4 pb-10">
+                      <button 
+                          type="button"
+                          onClick={handleDeleteClick}
+                          className={`w-full py-3.5 border rounded-xl font-bold text-sm shadow-sm transition-all flex items-center justify-center gap-2 ${
+                            isDeleting 
+                              ? 'bg-red-500 border-red-500 text-white animate-[pulse_0.2s_ease-out]' 
+                              : 'bg-white border-red-200 text-red-500 active:bg-red-50'
+                          }`}
+                      >
+                          {isDeleting ? (
+                             <>
+                               <i className="fa-solid fa-triangle-exclamation"></i> 確定要刪除嗎？ (點擊確認)
+                             </>
+                          ) : (
+                             <>
+                               <i className="fa-regular fa-trash-can"></i> 刪除此行程
+                             </>
+                          )}
+                      </button>
+                      {isDeleting && (
+                          <p className="text-center text-xs text-red-400 mt-2">
+                             再次點擊以永久刪除
+                          </p>
+                      )}
+                  </div>
                 </div>
               </>
             )}
