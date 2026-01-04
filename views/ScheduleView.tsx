@@ -291,7 +291,7 @@ const ScheduleView: React.FC = () => {
       <div className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-gray-200 shadow-sm pt-safe">
         <div className="px-6 pt-2 pb-3 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">行程 Schedule</h1>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">日本大阪行</h1>
             <p className="text-sm text-gray-500 mt-1 font-medium flex items-center">
               <i className="fa-solid fa-location-dot mr-1 text-ios-red"></i> {city}
             </p>
