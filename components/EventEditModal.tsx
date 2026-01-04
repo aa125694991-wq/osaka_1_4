@@ -19,6 +19,7 @@ const EventEditModal: React.FC<EventEditModalProps> = ({ event, isNew, onClose, 
   // Photo Action Sheet State
   const [showPhotoActions, setShowPhotoActions] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const fallbackCameraRef = useRef<HTMLInputElement>(null);
 
   // In-App Camera State
   const [showCamera, setShowCamera] = useState(false);
@@ -64,7 +65,7 @@ const EventEditModal: React.FC<EventEditModalProps> = ({ event, isNew, onClose, 
     window.open(url, '_blank');
   };
 
-  // --- Photo Handling: Gallery ---
+  // --- Photo Handling: Gallery & Fallback Camera ---
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -83,7 +84,6 @@ const EventEditModal: React.FC<EventEditModalProps> = ({ event, isNew, onClose, 
   const startCamera = async () => {
     try {
       setShowPhotoActions(false); // Close action sheet
-      setShowCamera(true); // Open camera UI
       
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
@@ -94,14 +94,15 @@ const EventEditModal: React.FC<EventEditModalProps> = ({ event, isNew, onClose, 
         audio: false
       });
       
+      setShowCamera(true); // Open camera UI only if stream success
       setCameraStream(stream);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
     } catch (err) {
-      console.error("Camera access denied or failed", err);
-      alert("無法存取相機，請檢查權限或改用相簿上傳。");
-      setShowCamera(false);
+      console.warn("Camera access denied or failed, falling back to native input", err);
+      // Fallback to native input
+      fallbackCameraRef.current?.click();
     }
   };
 
@@ -428,11 +429,20 @@ const EventEditModal: React.FC<EventEditModalProps> = ({ event, isNew, onClose, 
                </button>
             </div>
             
-            {/* Hidden Input for Gallery only */}
+            {/* Hidden Input for Gallery */}
             <input 
                ref={galleryInputRef}
                type="file" 
                accept="image/*" 
+               hidden 
+               onChange={handleFileSelect} 
+            />
+             {/* Hidden Input for Camera Fallback */}
+            <input 
+               ref={fallbackCameraRef}
+               type="file" 
+               accept="image/*" 
+               capture="environment"
                hidden 
                onChange={handleFileSelect} 
             />

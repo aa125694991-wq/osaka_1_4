@@ -37,6 +37,8 @@ export interface TodoItem {
   text: string;
   completed: boolean;
   assignedTo?: string; // name or 'All'
+  notes?: string;
+  photos?: string[];
 }
 
 export interface HourlyForecast {
