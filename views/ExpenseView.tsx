@@ -11,7 +11,7 @@ const INITIAL_MOCK_EXPENSES: Expense[] = [
   { id: '3', amount: 15000, currency: 'JPY', category: 'Accommodation', payer: 'Jimmy', splitWith: DEFAULT_MEMBERS, date: '2024-11-15', note: '飯店訂金' },
 ];
 
-const JPY_RATE = 0.215; // Mock rate
+const DEFAULT_JPY_RATE = 0.215; // Fallback rate if API fails
 
 const CATEGORIES = ['美食', '交通', '購物', '住宿', '票券', '其他'];
 const CATEGORY_MAP: Record<string, string> = {
@@ -35,6 +35,10 @@ const ExpenseView: React.FC = () => {
   const [members, setMembers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // --- Exchange Rate State ---
+  const [jpyRate, setJpyRate] = useState(DEFAULT_JPY_RATE);
+  const [isRateLive, setIsRateLive] = useState(false);
+
   // --- View State ---
   const [viewMode, setViewMode] = useState<'dashboard' | 'history'>('dashboard');
   const [historyTab, setHistoryTab] = useState<'list' | 'balance'>('list');
@@ -53,10 +57,28 @@ const ExpenseView: React.FC = () => {
   
   // Add Expense Form State
   const [amountInput, setAmountInput] = useState('');
+  const [currency, setCurrency] = useState<'JPY' | 'TWD'>('JPY'); // New Currency State
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [payer, setPayer] = useState('');
   const [splitWith, setSplitWith] = useState<string[]>([]);
   const [note, setNote] = useState('');
+
+  // --- Exchange Rate Sync ---
+  useEffect(() => {
+    fetch('https://api.exchangerate-api.com/v4/latest/JPY')
+      .then(res => res.json())
+      .then(data => {
+         const rate = data.rates?.TWD;
+         if (rate) {
+             setJpyRate(rate);
+             setIsRateLive(true);
+         }
+      })
+      .catch(err => {
+          console.error("Failed to fetch exchange rate:", err);
+          // Keep default rate
+      });
+  }, []);
 
   // --- Firebase Sync ---
   useEffect(() => {
@@ -122,7 +144,7 @@ const ExpenseView: React.FC = () => {
 
   // Calculations
   const totalJPY = expenses.filter(e => e.currency === 'JPY').reduce((acc, cur) => acc + cur.amount, 0);
-  const totalTWD = expenses.filter(e => e.currency === 'TWD').reduce((acc, cur) => acc + cur.amount, 0) + (totalJPY * JPY_RATE);
+  const totalTWD = expenses.filter(e => e.currency === 'TWD').reduce((acc, cur) => acc + cur.amount, 0) + (totalJPY * jpyRate);
 
   // --- Logic: Split Algorithm ---
   const { balances, settlements, groupedExpenses } = useMemo(() => {
@@ -132,7 +154,7 @@ const ExpenseView: React.FC = () => {
     // 1. Calculate Net Balance (in TWD)
     expenses.forEach(exp => {
         // Normalize to TWD for settlement
-        const amountTWD = exp.currency === 'JPY' ? exp.amount * JPY_RATE : exp.amount;
+        const amountTWD = exp.currency === 'JPY' ? exp.amount * jpyRate : exp.amount;
         
         // Payer gets positive credit
         if (bal[exp.payer] !== undefined) {
@@ -199,7 +221,7 @@ const ExpenseView: React.FC = () => {
     });
 
     return { balances: bal, settlements: results, groupedExpenses: groups };
-  }, [expenses, members]);
+  }, [expenses, members, jpyRate]); // Dependencies updated to include live rate
 
   // --- Handlers ---
 
@@ -210,7 +232,7 @@ const ExpenseView: React.FC = () => {
     const newExpense: Expense = {
       id: newId,
       amount: parseFloat(amountInput),
-      currency: 'JPY', // Default to JPY for Japan trip
+      currency: currency, // Use selected currency
       category,
       payer,
       splitWith,
@@ -256,6 +278,7 @@ const ExpenseView: React.FC = () => {
 
   const resetForm = () => {
     setAmountInput('');
+    setCurrency('JPY'); // Default reset to JPY
     setCategory(CATEGORIES[0]);
     if (members.length > 0) {
         setPayer(members[0]);
@@ -365,8 +388,15 @@ const ExpenseView: React.FC = () => {
           </div>
        </div>
        <div className="text-right">
-          <p className="font-bold text-gray-900">¥{exp.amount.toLocaleString()}</p>
-          <p className="text-xs text-gray-400">≈ NT${Math.round(exp.amount * JPY_RATE)}</p>
+          <p className="font-bold text-gray-900">
+              {exp.currency === 'JPY' ? '¥' : 'NT$'}{exp.amount.toLocaleString()}
+          </p>
+          <p className="text-xs text-gray-400">
+             {exp.currency === 'JPY' 
+                ? `≈ NT$${Math.round(exp.amount * jpyRate).toLocaleString()}`
+                : `≈ ¥${Math.round(exp.amount / jpyRate).toLocaleString()}`
+             }
+          </p>
        </div>
     </div>
   );
@@ -493,7 +523,7 @@ const ExpenseView: React.FC = () => {
                         )}
                         
                         <p className="text-center text-xs text-gray-400 mt-4">
-                            * 此金額依據匯率 {JPY_RATE} 計算
+                            * 此金額依據{isRateLive ? '即時' : '預設'}匯率 {jpyRate} 計算
                         </p>
                     </div>
                 )}
@@ -540,7 +570,10 @@ const ExpenseView: React.FC = () => {
                 <div className="mt-2 flex items-center gap-2 text-sm opacity-80">
                    <i className="fa-solid fa-yen-sign"></i>
                    <span>{totalJPY.toLocaleString()} JPY</span>
-                   <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">匯率: {JPY_RATE}</span>
+                   <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded flex items-center gap-1">
+                      {isRateLive && <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>}
+                      匯率: {jpyRate}
+                   </span>
                 </div>
              </div>
          </div>
@@ -589,9 +622,27 @@ const ExpenseView: React.FC = () => {
                </div>
 
                <div className="mb-6">
-                  <label className="text-xs font-bold text-gray-400 uppercase">金額 (日幣)</label>
+                  {/* Currency Toggle */}
+                  <div className="flex justify-center mb-4">
+                     <div className="bg-gray-100 p-1 rounded-xl flex w-full max-w-xs">
+                        <button 
+                            onClick={() => setCurrency('JPY')}
+                            className={`flex-1 py-1.5 rounded-lg text-sm font-bold transition-all ${currency === 'JPY' ? 'bg-white shadow text-gray-900' : 'text-gray-400'}`}
+                        >
+                            JPY 日幣
+                        </button>
+                        <button 
+                            onClick={() => setCurrency('TWD')}
+                            className={`flex-1 py-1.5 rounded-lg text-sm font-bold transition-all ${currency === 'TWD' ? 'bg-white shadow text-gray-900' : 'text-gray-400'}`}
+                        >
+                            TWD 台幣
+                        </button>
+                     </div>
+                  </div>
+
+                  <label className="text-xs font-bold text-gray-400 uppercase">金額</label>
                   <div className="flex items-center border-b-2 border-ios-blue py-2">
-                     <span className="text-3xl font-bold text-gray-900 mr-2">¥</span>
+                     <span className="text-3xl font-bold text-gray-900 mr-2">{currency === 'JPY' ? '¥' : 'NT$'}</span>
                      <input 
                        type="number" 
                        inputMode="decimal"
@@ -603,7 +654,10 @@ const ExpenseView: React.FC = () => {
                      />
                   </div>
                   <p className="text-right text-sm text-gray-500 mt-2">
-                     ≈ NT$ {amountInput ? Math.round(parseFloat(amountInput) * JPY_RATE) : 0}
+                     {currency === 'JPY' 
+                        ? `≈ NT$ ${amountInput ? Math.round(parseFloat(amountInput) * jpyRate) : 0}`
+                        : `≈ ¥ ${amountInput ? Math.round(parseFloat(amountInput) / jpyRate) : 0}`
+                     }
                   </p>
                </div>
                
@@ -760,19 +814,48 @@ const ExpenseView: React.FC = () => {
                         <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-xl mb-2 shadow-lg ${getCategoryColor(selectedExpense.category)}`}>
                             <i className={`fa-solid ${getCategoryIcon(selectedExpense.category)}`}></i>
                         </div>
-                        <div className="text-2xl font-bold text-gray-900">¥{selectedExpense.amount.toLocaleString()}</div>
-                        <div className="text-xs text-gray-500">≈ NT${Math.round(selectedExpense.amount * JPY_RATE)}</div>
+                        <div className="text-2xl font-bold text-gray-900">
+                             {selectedExpense.currency === 'JPY' ? '¥' : 'NT$'}
+                             {selectedExpense.amount.toLocaleString()}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                             {selectedExpense.currency === 'JPY' 
+                                ? `≈ NT$${Math.round(selectedExpense.amount * jpyRate).toLocaleString()}`
+                                : `≈ ¥${Math.round(selectedExpense.amount / jpyRate).toLocaleString()}`
+                             }
+                        </div>
                     </>
                  ) : (
                     <div className="w-full px-8">
-                       <label className="text-xs font-bold text-gray-400 uppercase text-center block mb-1">金額 (日幣)</label>
-                       <input 
-                         type="number" 
-                         inputMode="decimal"
-                         className="w-full text-center text-3xl font-bold bg-transparent border-b-2 border-ios-blue outline-none py-1"
-                         value={editForm.amount}
-                         onChange={(e) => setEditForm({ ...editForm, amount: parseFloat(e.target.value) || 0 })}
-                       />
+                       {/* Edit Currency Toggle */}
+                       <div className="flex justify-center mb-4">
+                            <div className="bg-gray-200 p-1 rounded-xl flex w-40">
+                                <button 
+                                    onClick={() => setEditForm({...editForm, currency: 'JPY'})}
+                                    className={`flex-1 py-1 rounded-lg text-xs font-bold transition-all ${editForm.currency === 'JPY' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}
+                                >
+                                    JPY
+                                </button>
+                                <button 
+                                    onClick={() => setEditForm({...editForm, currency: 'TWD'})}
+                                    className={`flex-1 py-1 rounded-lg text-xs font-bold transition-all ${editForm.currency === 'TWD' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}
+                                >
+                                    TWD
+                                </button>
+                            </div>
+                       </div>
+                       
+                       <label className="text-xs font-bold text-gray-400 uppercase text-center block mb-1">金額</label>
+                       <div className="flex items-center justify-center gap-1 border-b-2 border-ios-blue pb-1">
+                           <span className="text-xl font-bold text-gray-500">{editForm.currency === 'JPY' ? '¥' : 'NT$'}</span>
+                           <input 
+                             type="number" 
+                             inputMode="decimal"
+                             className="w-32 text-center text-3xl font-bold bg-transparent outline-none"
+                             value={editForm.amount}
+                             onChange={(e) => setEditForm({ ...editForm, amount: parseFloat(e.target.value) || 0 })}
+                           />
+                       </div>
                     </div>
                  )}
              </div>
