@@ -299,20 +299,11 @@ const ScheduleView: React.FC = () => {
           
           <div className="flex gap-3">
               <button 
-                onClick={() => setIsReorderMode(!isReorderMode)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isReorderMode ? 'bg-ios-green text-white shadow-lg' : 'bg-gray-100 text-gray-600'}`}
+                  onClick={handleAddNewEvent} 
+                  className="w-10 h-10 rounded-full bg-ios-blue text-white flex items-center justify-center shadow-lg shadow-blue-200 active:scale-90 transition-transform"
               >
-                <i className={`fa-solid ${isReorderMode ? 'fa-check' : 'fa-pen'}`}></i>
+                  <i className="fa-solid fa-plus text-xl"></i>
               </button>
-              
-              {!isReorderMode && (
-                <button 
-                    onClick={handleAddNewEvent} 
-                    className="w-10 h-10 rounded-full bg-ios-blue text-white flex items-center justify-center shadow-lg shadow-blue-200 active:scale-90 transition-transform"
-                >
-                    <i className="fa-solid fa-plus text-xl"></i>
-                </button>
-              )}
           </div>
         </div>
         
@@ -450,6 +441,25 @@ const ScheduleView: React.FC = () => {
                         </div>
                         <h3 className="text-lg font-bold text-gray-900 mb-1">{event.title}</h3>
                         
+                        {/* Reservation Number (Added Directly in List) */}
+                        {event.reservationNumber && (
+                           <div className="mt-1 mb-2 inline-block bg-slate-100 border border-slate-200 rounded-md px-2 py-1" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-1.5">
+                                 <i className="fa-solid fa-ticket text-slate-400 text-xs"></i>
+                                 <span className="text-xs font-bold text-slate-700 tracking-wider font-mono">{event.reservationNumber}</span>
+                                 <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigator.clipboard.writeText(event.reservationNumber || '');
+                                    }}
+                                    className="ml-1 text-slate-400 active:text-slate-600 p-1 -m-1"
+                                 >
+                                    <i className="fa-regular fa-copy text-[10px]"></i>
+                                 </button>
+                              </div>
+                           </div>
+                        )}
+
                         {/* Render Photos if available */}
                         {event.photos && event.photos.length > 0 && (
                         <div className="mt-2 mb-2 flex gap-2 overflow-x-auto no-scrollbar">
@@ -465,7 +475,7 @@ const ScheduleView: React.FC = () => {
                                 <span className="truncate">{event.location.name || '未設定地點'}</span>
                             </div>
                             
-                            {/* Direct Navigation Button */}
+                            {/* Direct Navigation Button - RESTORED */}
                             {event.location.name && (
                                 <button 
                                     onClick={(e) => handleOpenMaps(event, e)}

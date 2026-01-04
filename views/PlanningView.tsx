@@ -93,6 +93,15 @@ const PlanningView: React.FC = () => {
 
   // --- Derived State ---
   const activeList = lists.find(l => l.id === activeListId);
+  
+  // Sort items: Incomplete items first, Completed items last
+  const sortedItems = activeList 
+    ? [...activeList.items].sort((a, b) => {
+        if (a.completed === b.completed) return 0;
+        return a.completed ? 1 : -1;
+    })
+    : [];
+
   const progress = activeList && activeList.items.length > 0
     ? Math.round((activeList.items.filter(i => i.completed).length / activeList.items.length) * 100)
     : 0;
@@ -270,7 +279,7 @@ const PlanningView: React.FC = () => {
 
                     {/* Items List */}
                     <div className="space-y-3">
-                        {activeList.items.map(item => (
+                        {sortedItems.map(item => (
                         <div 
                             key={item.id}
                             className="group bg-white p-4 rounded-xl border border-gray-100 shadow-ios-sm flex items-center gap-4 active:scale-[0.99] transition-all relative overflow-hidden"
