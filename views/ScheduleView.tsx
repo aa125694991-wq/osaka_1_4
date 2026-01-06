@@ -348,6 +348,44 @@ const ScheduleView: React.FC = () => {
      }
   };
 
+  // --- Day Map Logic ---
+  const handleOpenDayMap = () => {
+    // Filter events that have a location name
+    const validLocations = currentEventsSorted
+        .map(e => e.location.name)
+        .filter(name => name && name.trim() !== '');
+
+    if (validLocations.length === 0) {
+        alert("此日期尚無設定地點的行程");
+        return;
+    }
+
+    // If only one location, open basic search
+    if (validLocations.length === 1) {
+        const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(validLocations[0])}`;
+        window.open(url, '_blank');
+        return;
+    }
+
+    // If multiple locations, create a route (Directions)
+    // Origin = First event, Destination = Last event, Waypoints = Everything in between
+    const origin = encodeURIComponent(validLocations[0]);
+    const destination = encodeURIComponent(validLocations[validLocations.length - 1]);
+    
+    // Google Maps API allows waypoints joined by pipe '|'
+    // We take elements from index 1 to length-2
+    const waypoints = validLocations.slice(1, -1).map(loc => encodeURIComponent(loc)).join('|');
+
+    let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`;
+    if (waypoints) {
+        url += `&waypoints=${waypoints}`;
+    }
+    // Set travel mode to transit (public transport) as default for Japan
+    url += `&travelmode=transit`;
+
+    window.open(url, '_blank');
+  };
+
 
   // --- Event Handlers ---
   const handleAddNewEvent = () => {
@@ -410,6 +448,17 @@ const ScheduleView: React.FC = () => {
           </div>
           
           <div className="flex gap-3">
+              {/* Day Map Button */}
+              {!isReorderMode && (
+                  <button 
+                      onClick={handleOpenDayMap}
+                      className="w-10 h-10 rounded-full bg-white text-ios-blue border border-gray-200 shadow-sm flex items-center justify-center active:scale-90 transition-transform active:bg-gray-50"
+                      title="在地圖上查看整天行程"
+                  >
+                      <i className="fa-solid fa-map-location-dot text-lg"></i>
+                  </button>
+              )}
+              
               <button 
                   onClick={handleAddNewEvent} 
                   className="w-10 h-10 rounded-full bg-ios-blue text-white flex items-center justify-center shadow-lg shadow-blue-200 active:scale-90 transition-transform"
