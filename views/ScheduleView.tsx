@@ -19,22 +19,22 @@ import { Reorder } from 'framer-motion';
 const ReorderGroup = Reorder.Group as any;
 const ReorderItem = Reorder.Item as any;
 
-// 離線預設資料
+// 離線預設資料 (Fallback)
 const OFFLINE_WEATHER_DATA: Record<string, WeatherInfo> = {};
 INITIAL_DATES.forEach(date => {
   OFFLINE_WEATHER_DATA[date] = {
     date,
     condition: 'sunny',
     conditionCode: 1, // Clear sky
-    tempMax: 8,  // Winter temp
-    tempMin: 2,
-    apparentTempMax: 6,
-    apparentTempMin: 0,
-    currentTemp: 5,
+    tempMax: 12,  
+    tempMin: 5,
+    apparentTempMax: 10,
+    apparentTempMin: 3,
+    currentTemp: 8,
     precipitationProb: 10,
     hourly: Array(24).fill(0).map((_, i) => ({
       time: `${String(i).padStart(2, '0')}:00`,
-      temp: 5,
+      temp: 8,
       conditionCode: 1,
       precipitationProb: 0
     }))
@@ -145,8 +145,120 @@ const ScheduleView: React.FC = () => {
   }, [dates.length]);
 
   const fetchWeather = async (targetDates: string[]) => {
-    setCity('京都 (Kyoto)'); 
-    setWeatherData(OFFLINE_WEATHER_DATA); 
+    setCity('定位中...');
+
+    // Osaka Coordinates (Default fallback)
+    const OSAKA_LAT = 34.6937;
+    const OSAKA_LON = 135.5023;
+
+    // Helper: Fetch from Open-Meteo API
+    const fetchFromApi = async (lat: number, lon: number) => {
+        try {
+            const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`);
+            if (!res.ok) throw new Error('API Error');
+            return await res.json();
+        } catch (e) {
+            console.error(e);
+            return null;
+        }
+    };
+
+    // Helper: Reverse Geocode City Name
+    const fetchCityName = async (lat: number, lon: number) => {
+        try {
+            // Using BigDataCloud Free API for city name
+            const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=zh`);
+            if (!res.ok) return '目前位置';
+            const data = await res.json();
+            // Try different fields to get the best city name (e.g., "Taichung City", "Kyoto City")
+            return data.city || data.locality || data.principalSubdivision || '目前位置';
+        } catch (e) {
+            console.warn("Reverse geocode failed", e);
+            return '目前位置';
+        }
+    };
+
+    // Helper: Map API data to our App State
+    const updateWeatherState = (apiData: any, cityName: string) => {
+        const newWeather: Record<string, WeatherInfo> = {};
+
+        targetDates.forEach((dateStr, idx) => {
+            if (!apiData) {
+                // Completely failed, use offline hardcoded data
+                newWeather[dateStr] = OFFLINE_WEATHER_DATA[dateStr] || OFFLINE_WEATHER_DATA[INITIAL_DATES[0]];
+                return;
+            }
+
+            // The app uses 2026 dates, but API returns today+7 days.
+            // We map the API's daily forecast index to our dates index to simulate dynamic data.
+            const dailyIdx = idx % (apiData.daily.time.length || 1);
+            
+            const wCode = apiData.daily.weather_code[dailyIdx];
+            const max = Math.round(apiData.daily.temperature_2m_max[dailyIdx]);
+            const min = Math.round(apiData.daily.temperature_2m_min[dailyIdx]);
+            const prob = apiData.daily.precipitation_probability_max?.[dailyIdx] ?? 0;
+            const currentT = Math.round(apiData.current.temperature_2m);
+            const currentApparent = Math.round(apiData.current.apparent_temperature);
+
+            // Generate a simple curve for hourly temps based on max/min
+            const hourly = Array(24).fill(0).map((_, h) => {
+                const t = min + (max - min) * Math.sin((h - 4) * Math.PI / 14); 
+                return {
+                    time: `${String(h).padStart(2,'0')}:00`,
+                    temp: Math.round(t > max ? max : t), 
+                    conditionCode: wCode,
+                    precipitationProb: prob
+                };
+            });
+
+            newWeather[dateStr] = {
+                date: dateStr,
+                condition: 'sunny', // Legacy field
+                conditionCode: wCode,
+                tempMax: max,
+                tempMin: min,
+                apparentTempMax: max + 2,
+                apparentTempMin: min - 2,
+                currentTemp: currentT,
+                currentApparentTemp: currentApparent,
+                precipitationProb: prob,
+                hourly: hourly
+            };
+        });
+
+        setWeatherData(newWeather);
+        setCity(cityName);
+    };
+
+    // Geolocation Flow
+    if (!navigator.geolocation) {
+        // Browser doesn't support -> Fallback to Osaka
+        const data = await fetchFromApi(OSAKA_LAT, OSAKA_LON);
+        updateWeatherState(data, '大阪 (Osaka)');
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+            // Success -> Use current location
+            const { latitude, longitude } = position.coords;
+            
+            // Parallel fetch: Weather + City Name
+            const [weatherData, detectedCity] = await Promise.all([
+                fetchFromApi(latitude, longitude),
+                fetchCityName(latitude, longitude)
+            ]);
+            
+            updateWeatherState(weatherData, detectedCity);
+        },
+        async (error) => {
+            // Error/Denied -> Fallback to Osaka
+            console.warn("Geolocation failed, defaulting to Osaka.", error);
+            const data = await fetchFromApi(OSAKA_LAT, OSAKA_LON);
+            updateWeatherState(data, '大阪 (Osaka)');
+        },
+        { timeout: 6000, enableHighAccuracy: false }
+    );
   };
 
   // --- Pull To Refresh Logic ---
@@ -178,7 +290,7 @@ const ScheduleView: React.FC = () => {
         setTimeout(() => {
             setIsRefreshing(false);
             setPullY(0);
-            // Optionally re-fetch weather here if it was real API
+            // Optionally re-fetch weather here
             fetchWeather(dates); 
         }, 1500);
     } else {
@@ -391,7 +503,7 @@ const ScheduleView: React.FC = () => {
                     </div>
                 </div>
                 <div className="text-right">
-                    <span className="text-3xl font-bold text-gray-900 tracking-tight">{currentWeather?.currentTemp ?? 15}°</span>
+                    <span className="text-3xl font-bold text-gray-900 tracking-tight">{currentWeather?.currentTemp ?? '--'}°</span>
                 </div>
                 </button>
             )}
